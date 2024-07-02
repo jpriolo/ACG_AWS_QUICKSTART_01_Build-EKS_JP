@@ -1,0 +1,78 @@
+module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "19.0.4"
+
+  cluster_name    = local.cluster_name
+  cluster_version = "1.29"
+
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnets
+
+  # NEW - ADDED - JP
+  cluster_endpoint_public_access = true
+  enable_irsa = true
+
+  eks_managed_node_group_defaults = {
+    ami_type = "AL2_x86_64"
+  }
+ 
+
+  eks_managed_node_groups = {
+    one = {
+      name = "node-group-1"
+
+      instance_types = ["t3.small"]
+      capacity_type  = "SPOT"
+      # key_name   = "tf-key"
+      key_name   = "var.key_name"
+      # instance_type = var.launch_template_instance_type
+
+      min_size     = 1
+      max_size     = 2
+      desired_size = 1
+    }
+
+    two = {
+      name = "node-group-2"
+
+      instance_types = ["t3.small"]
+      capacity_type  = "SPOT"
+      # key_name   = "tf-key"
+      key_name   = "var.key_name"
+
+      min_size     = 1
+      max_size     = 2
+      desired_size = 1
+    }
+  }
+}
+
+###### PLACE AFTER 'NODE_GROUPS' CODEBLOCK #######
+
+  # Create & attach SSH Key Pair
+  resource "aws_key_pair" "tf-key" {
+    key_name   = "tf-key"
+    public_key = tls_private_key.rsa.public_key_openssh
+  }
+
+  # RSA key of size 4096 bits
+  resource "tls_private_key" "rsa" {
+    algorithm = "RSA"
+    rsa_bits  = 4096
+  }
+
+  resource "local_file" "tf-key" {
+    content  = tls_private_key.rsa.private_key_pem
+    filename = "tf-key.pem"
+    # filename = "~/.ssh/tfkey"
+    # filename = "${path.module}/foo.bar"
+
+  # Set permissions on new SSH Private key
+    provisioner "local-exec" {
+      command = "echo 'Your new Keypair named: tf-key.pem has been created and attached to all instances & the public key is saved in this repo. Cheers!' > New-KeyPair_INFO.txt"
+    }
+
+    provisioner "local-exec" {
+      command = "chmod 400 tf-key.pem"
+    }
+  }
